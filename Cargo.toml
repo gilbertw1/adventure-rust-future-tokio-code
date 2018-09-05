@@ -1,0 +1,10 @@
+[package]
+name = "adventure-rust-future-and-tokio-code"
+version = "0.1.0"
+authors = ["Bryan Gilbert <bryan@bryan.sh>"]
+
+[dependencies]
+domain = "0.2"
+tokio-core = "0.1.17"
+hyper = "0.12"
+futures = "0.1.23"
