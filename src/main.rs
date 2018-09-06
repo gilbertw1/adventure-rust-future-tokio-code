@@ -12,7 +12,7 @@ use domain::resolv::Resolver;
 use domain::resolv::lookup::addr::lookup_addr;
 
 fn main() {
-    let ip_addr = "89.242.204.127".parse::<IpAddr>().unwrap();
+    let ip_addr = "172.217.3.238".parse::<IpAddr>().unwrap();
     
     // Use Naive Solution
     let hostnames = lookup_hostnames(ip_addr);
