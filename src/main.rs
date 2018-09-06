@@ -6,7 +6,8 @@ use std::net::IpAddr;
 use std::thread;
 
 use futures::{Stream, Future};
-use futures::sync::{mpsc, oneshot};
+use futures::sync::{oneshot, mpsc as fmpsc};
+use std::sync::mpsc;
 use tokio_core::reactor::Core;
 use domain::resolv::Resolver;
 use domain::resolv::lookup::addr::lookup_addr;
@@ -21,13 +22,22 @@ fn main() {
         println!(" - {}", hostname);
     }
 
-    // Use Actual Solution
-    println!("[ACTUAL] Reverse Ip Look Results For: {}", ip_addr);
+    // Blog Post Solution
+    println!("[BLOG] Reverse Ip Look Results For: {}", ip_addr);
     let handle = create_lookup_handle();
     let result_future = handle.lookup_hostnames(ip_addr);
     for hostname in result_future.wait().unwrap() {
         println!(" - {}", hostname);
     }
+
+    // Improved Simplified Solution
+    println!("[Simple] Reverse Ip Look Results For: {}", ip_addr);
+    let handle = create_simple_lookup_handle();
+    let result_future = handle.lookup_hostnames(ip_addr);
+    for hostname in result_future.wait().unwrap() {
+        println!(" - {}", hostname);
+    }
+
 }
 
 //
@@ -49,7 +59,7 @@ fn lookup_hostnames(ip: IpAddr) -> Vec<String> {
 //
 
 fn create_lookup_handle() -> DnsLookupHandle {
-    let (req_tx, req_rx) = mpsc::unbounded::<ReverseLookupRequest>();
+    let (req_tx, req_rx) = fmpsc::unbounded::<ReverseLookupRequest>();
 
     thread::spawn(move || {
         let mut core = Core::new().unwrap();
@@ -92,7 +102,7 @@ struct ReverseLookupResponse {
  
 #[derive(Clone)]
 pub struct DnsLookupHandle {
-    request_sender: mpsc::UnboundedSender<ReverseLookupRequest>,
+    request_sender: fmpsc::UnboundedSender<ReverseLookupRequest>,
 }
 
 impl DnsLookupHandle {
@@ -100,5 +110,34 @@ impl DnsLookupHandle {
         let (resp_tx, resp_rx) = oneshot::channel::<ReverseLookupResponse>();
         let result = self.request_sender.unbounded_send(ReverseLookupRequest { ip: ip, sender: resp_tx });
         resp_rx.map(|res| res.names)
+    }
+}
+
+//
+// Simplified Solution
+//
+
+fn create_simple_lookup_handle() -> SimpleDnsLookupHandle {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let mut core = Core::new().unwrap();
+        let resolv = Resolver::new(&core.handle()); 
+        tx.send(resolv);
+        loop { core.turn(None); }
+    });
+
+    return SimpleDnsLookupHandle { resolv: rx.recv().unwrap() }
+}
+
+
+#[derive(Clone)]
+pub struct SimpleDnsLookupHandle {
+    resolv: Resolver,
+}
+
+impl SimpleDnsLookupHandle {
+    pub fn lookup_hostnames(&self, ip: IpAddr) -> impl Future<Item=Vec<String>, Error=()> {
+        lookup_addr(self.resolv.clone(), ip).map_err(|e| println!("error = {:?}", e))
+                                    .map(|addrs| addrs.iter().map(|n| n.to_string()).collect())
     }
 }
